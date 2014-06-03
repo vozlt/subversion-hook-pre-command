@@ -1,0 +1,16 @@
+#!/bin/sh
+#
+# @file: pre-command
+# @brief: pre-command hook bash script
+# @author: YoungJoo.Kim <http://superlinuxer.com>
+# @version: $Revision:
+# @date: $Date:
+#
+
+[ -n "$1" ] && REPOS="$1" || REPOS=0
+[ -n "$2" ] && CMDNAME="$2" || CMDNAME=0
+[ -n "$3" ] && TARGET="$3" || TARGET=0
+[ -n "$4" ] && USER="$4" || USER=0
+
+# find path : $REPOS/hooks/conf/access.conf
+command-access-control.pl $REPOS $CMDNAME $TARGET $USER access.conf

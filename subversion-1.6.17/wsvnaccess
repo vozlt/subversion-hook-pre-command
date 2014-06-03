@@ -1,0 +1,159 @@
+#!/usr/bin/perl
+#
+# @file: wsvnaccess
+# @brief: websvn access perl script
+# @author: YoungJoo.Kim <http://superlinuxer.com>
+# @version: $Revision:
+# @date: $Date:
+#
+
+my $repos = shift;
+my $cmdname = shift;
+my $target = shift;
+my $user = shift;
+my $conf = shift;
+my $remote_ip = shift;
+
+my $ACCESS = Access::new();
+
+$ACCESS->Controller();
+
+# Package Start
+package Access;
+
+use strict;
+use Fcntl;
+use IO::Handle;
+use File::Basename;
+use DBI;
+
+use vars qw(%groups @users %perms @passwd @group);
+use vars qw($SUCCESS $FAIL @RESULTS);
+
+sub new{
+
+	my $self = {};
+
+	$self->{access_repos_path} = '/home/httpd/html/websvn/repository';
+	$self->{hostname} =`/bin/hostname`; chomp $self->{hostname};
+
+	# DBI
+	$self->{access_db_host} = '@db_host@';
+	$self->{access_db_port} = @db_port@;
+	$self->{access_db_name} = '@db_name@';
+	$self->{access_db_user} = '@db_user@';
+	$self->{access_db_password} = '@db_password@';
+	$self->{n_rows} = undef;
+	$self->{n_fields} = undef;
+	$self->{dbh} = undef;
+	$self->{sth} = undef;
+
+	$self->{result} = undef;
+
+	$SUCCESS = 0;
+	$FAIL = 1;
+
+	$RESULTS[$SUCCESS] = 'ALLOW';
+	$RESULTS[$FAIL] = 'DENY';
+
+	return bless $self;
+}
+
+
+sub accessCreate {
+	my $self = shift if ref ($_[0]);
+	my $query = undef;
+	my $ref = undef;
+	my $ret = $SUCCESS;
+
+	$self->dbConnect($self->{access_db_host}, $self->{access_db_port}, $self->{access_db_name}, $self->{access_db_user}, $self->{access_db_password});
+	$query = "SELECT * FROM svn_conf WHERE hostname='$self->{hostname}' AND access='ALLOW';";
+
+	$self->dbQuery($query);
+
+	while ($ref = $self->dbFetch()) {
+		my $repos = basename($ref->{repos});
+		if ( ! -d "$self->{access_repos_path}/$ref->{user}" ) {
+			mkdir("$self->{access_repos_path}/$ref->{user}");
+		}
+		if ( ! -e "$self->{access_repos_path}/$ref->{user}/$repos" ) {
+			symlink($ref->{repos}, "$self->{access_repos_path}/$ref->{user}/$repos");
+			print "WEBSVN Permission Insert OK : $self->{hostname}, $ref->{repos}, $ref->{user}\n";
+		}
+	}
+
+	$self->dbFetchfinish();
+	$self->dbClose();
+}
+
+sub Controller {
+	my $self = shift if ref ($_[0]);
+
+	if ( ! -d $self->{access_repos_path} ) {
+		mkdir($self->{access_repos_path});
+	}
+	$self->accessCreate();
+}
+
+sub trim {
+	my $self = shift if ref ($_[0]);
+	my $_r = $_[0];
+
+	$_r =~ s/[\s\n]*//g;
+
+	return $_r;
+}
+
+sub fileReadlines { 
+	my $self = shift if ref ($_[0]);
+	my $path = $_[0];
+	my $ret = undef;
+	my @lines = ();  
+	$ret = sysopen(FH, $path, O_RDONLY);
+	@lines = FH->getlines() if ($ret);
+	close(FH);      
+	return ($ret) ? @lines : $ret;
+}
+
+#######################################
+# DBI_MYSQL
+#######################################
+sub dbConnect {
+	my $self = shift if ref ($_[0]);
+	my $access_db_host = $_[0];
+	my $access_db_port = $_[1];
+	my $access_db_name = $_[2];
+	my $access_db_user = $_[3];
+	my $access_db_password = $_[4];
+
+	$self->{dbh} = DBI->connect("DBI:mysql:database=$access_db_name;host=$access_db_host;port=$access_db_port", $access_db_user, $access_db_password);
+}
+
+sub dbQuery {
+	my $self = shift if ref ($_[0]);
+	my $query = $_[0];
+	$self->{sth} = $self->{dbh}->prepare($query);
+	$self->{sth}->execute;
+	$self->{n_rows} = $self->{sth}->rows();
+	$self->{n_fields} = $self->{sth}->{'NUM_OF_FIELDS'};
+}
+
+sub dbFetch {
+	my $self = shift if ref ($_[0]);
+	my $sfh =  $self->{sth}->fetchrow_hashref();
+	$self->{sth}->finish() if (!$sfh);
+	return $sfh;
+}
+
+sub dbFetchfinish {
+	my $self = shift if ref ($_[0]);
+	$self->{sth}->finish();
+}
+
+sub dbClose {
+	my $self = shift if ref ($_[0]);
+	#$self->{sth}->finish();
+	$self->{dbh}->disconnect();
+}
+
+1;

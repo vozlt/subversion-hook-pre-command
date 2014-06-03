@@ -1,0 +1,82 @@
+#!/bin/bash
+#
+# @file: svncreate
+# @brief: svn bash script
+# @author: YoungJoo.Kim <http://superlinuxer.com>
+# @version: $Revision:
+# @date: $Date:
+#
+
+# Repository configure
+repos_parents=(svndev svnreal)
+
+# Return define
+RC_SUCCESS=0
+RC_FAILURE=1
+
+im=$(whoami)
+[ "$im" != "root" ] && exit
+
+usage() {
+	_repos_parents=${repos_parents[*]}
+	_repos_parents=${_repos_parents// /|}
+	echo "Usage: $0 [$_repos_parents] [repository]"
+	exit
+}
+
+repos_parent_search() {
+	_ret=$RC_FAILURE
+	_repos_parent=$1
+	for ((b=0; b < ${#repos_parents[@]} ; b++))
+	do  
+		_tmp=${repos_parents[$b]}
+		if [ "$_repos_parent" == "$_tmp" ];then
+			return $RC_SUCCESS;
+		fi
+	done
+	return $_ret
+}
+
+repos_parent=$1
+repos_child=$2
+
+repos_parent_search $repos_parent
+RC=$?
+
+if [ "$RC" -ne "$RC_SUCCESS" -o -z "$repos_child" ]; then
+	usage
+fi
+
+if [ -d "/${repos_parent}/${repos_child}" ]; then
+	echo "ERROR: ${repos_child} module is already exist!"
+	exit 1
+fi
+
+pushd /${repos_parent} >& /dev/null
+
+echo " * Create ${repos_child} SVN repository"
+svnadmin create --fs-type fsfs ${repos_child}
+
+echo " * Set permission"
+chgrp -R splrgroups ${repos_child}
+chmod g+w ${repos_child}/db
+
+echo " * Init repository"
+svn mkdir file://localhost/$repos_parent/${repos_child}/tags -m "init tags" >& /dev/null
+svn mkdir file://localhost/$repos_parent/${repos_child}/branches -m "init branches" >& /dev/null
+svn mkdir file://localhost/$repos_parent/${repos_child}/trunk -m "init trunk" >& /dev/null
+cp /superlinuxer/bin/svn-hook-scripts/pre-command /${repos_parent}/${repos_child}/hooks >& /dev/null
+cp /superlinuxer/bin/svn-hook-scripts/access.conf /${repos_parent}/${repos_child}/conf >& /dev/null
+cp /superlinuxer/bin/svn-hook-scripts/access_file.conf /${repos_parent}/${repos_child}/conf >& /dev/null
+cp /superlinuxer/bin/svn-hook-scripts/access_db.conf /${repos_parent}/${repos_child}/conf >& /dev/null
+cp /superlinuxer/bin/svn-default-conf/svnserve.conf /${repos_parent}/${repos_child}/conf >& /dev/null
+chgrp -R "splrgroups" "/${repos_parent}/${repos_child}/hooks/pre-command"
+chgrp -R "splrgroups" "/${repos_parent}/${repos_child}/conf/access.conf"
+chgrp -R "splrgroups" "/${repos_parent}/${repos_child}/conf/access_file.conf"
+chgrp -R "splrgroups" "/${repos_parent}/${repos_child}/conf/access_db.conf"
+chgrp -R "splrgroups" "/${repos_parent}/${repos_child}/conf/svnserve.conf"
+chmod -R g+w ${repos_child}/db/{current,revprops,revs,transactions,write-lock,min-unpacked-rev,rep-cache.db,txn-current,txn-current-lock,txn-protorevs}
+
+popd >& /dev/null
+
+exit 0

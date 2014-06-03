@@ -1,0 +1,22 @@
+#!/bin/sh
+#
+# @file: pre-command
+# @brief: pre-command hook bash script
+# @author: YoungJoo.Kim <http://superlinuxer.com>
+# @version: $Revision:
+# @date: $Date:
+#
+
+# GET REMOTE_IP
+USER=$(whoami)
+[ -f /var/log/last_env/$USER ] && . /var/log/last_env/$USER
+REMOTE=($SSH_CLIENT)
+REMOTE_IP=${REMOTE[0]}
+
+[ -n "$1" ] && REPOS="$1" || REPOS=0
+[ -n "$2" ] && CMDNAME="$2" || CMDNAME=0
+[ -n "$3" ] && TARGET="$3" || TARGET=0
+[ -n "$4" ] && USER="$4" || USER=0
+[ -z "$REMOTE_IP" ] && $REMOTE_IP=0
+
+command-access-control.pl $REPOS $CMDNAME $TARGET $USER access.conf $REMOTE_IP

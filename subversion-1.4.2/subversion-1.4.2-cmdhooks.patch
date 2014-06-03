@@ -1,0 +1,201 @@
+diff -urNp subversion-1.4.2.org/subversion/include/svn_repos.h subversion-1.4.2/subversion/include/svn_repos.h
+--- subversion-1.4.2.org/subversion/include/svn_repos.h	2006-04-22 05:14:08.000000000 +0900
++++ subversion-1.4.2/subversion/include/svn_repos.h	2010-08-24 13:52:03.000000000 +0900
+@@ -331,6 +331,9 @@ const char *svn_repos_pre_revprop_change
+ const char *svn_repos_post_revprop_change_hook(svn_repos_t *repos,
+                                                apr_pool_t *pool);
+ 
++/** Return the path to @a repos's pre-command hook, allocated in @a pool. */ 
++const char *svn_repos_pre_command_hook(svn_repos_t *repos, apr_pool_t *pool);
++
+ 
+ /** @defgroup svn_repos_lock_hooks paths to lock hooks
+  * @{ 
+diff -urNp subversion-1.4.2.org/subversion/libsvn_ra_svn/marshal.c subversion-1.4.2/subversion/libsvn_ra_svn/marshal.c
+--- subversion-1.4.2.org/subversion/libsvn_ra_svn/marshal.c	2006-02-16 06:30:49.000000000 +0900
++++ subversion-1.4.2/subversion/libsvn_ra_svn/marshal.c	2010-08-24 17:24:19.000000000 +0900
+@@ -40,6 +40,34 @@
+ 
+ #define svn_iswhitespace(c) ((c) == ' ' || (c) == '\n')
+ 
++#include "svn_repos.h"
++
++typedef struct {
++	svn_repos_t *repos;
++	svn_fs_t *fs;            /* For convenience; same as svn_repos_fs(repos) */
++	svn_config_t *cfg;       /* Parsed repository svnserve.conf */
++	svn_config_t *pwdb;      /* Parsed password database */
++	svn_authz_t *authzdb;    /* Parsed authz rules */
++	const char *authz_repos_name; /* The name of the repository */
++	const char *realm;       /* Authentication realm */
++	const char *repos_url;   /* URL to base of repository */
++	svn_stringbuf_t *fs_path;/* Decoded base path inside repository */
++	const char *user;
++	svn_boolean_t tunnel;    /* Tunneled through login agent */
++	const char *tunnel_user; /* Allow EXTERNAL to authenticate as this */
++	svn_boolean_t read_only; /* Disallow write access (global flag) */
++	int protocol_version;
++	apr_pool_t *pool;
++} server_baton_t;
++
++typedef struct {
++	server_baton_t *sb;
++	const char *repos_url;  /* Decoded repository URL. */
++	void *report_baton;
++	svn_error_t *err;
++} report_driver_baton_t;
++
++
+ /* --- CONNECTION INITIALIZATION --- */
+ 
+ svn_ra_svn_conn_t *svn_ra_svn_create_conn(apr_socket_t *sock,
+@@ -822,8 +850,11 @@ svn_error_t *svn_ra_svn_handle_commands(
+   apr_pool_t *subpool = svn_pool_create(pool);
+   const char *cmdname;
+   int i;
++  int main_command_set = 1;
+   svn_error_t *err, *write_err;
+   apr_array_header_t *params;
++  server_baton_t *b = baton;
++  report_driver_baton_t *c;
+ 
+   while (1)
+     {
+@@ -831,11 +862,47 @@ svn_error_t *svn_ra_svn_handle_commands(
+       SVN_ERR(svn_ra_svn_read_tuple(conn, subpool, "wl", &cmdname, &params));
+       for (i = 0; commands[i].cmdname; i++)
+         {
++			if (strcmp(commands[i].cmdname, "set-path") == 0)
++			{
++				c = baton;
++				b = c->sb;
++				main_command_set = 0;
++			}
+           if (strcmp(cmdname, commands[i].cmdname) == 0)
+             break;
+         }
+-      if (commands[i].cmdname)
+-        err = (*commands[i].handler)(conn, subpool, params, baton);
++	  if (commands[i].cmdname)
++	  {
++		  if (main_command_set)
++		  {
++			  err = svn_repos__hooks_pre_command(b->repos, cmdname, b->fs_path->data,
++					  b->tunnel_user ? b->tunnel_user : b->user, subpool); 
++			  if (err!=SVN_NO_ERROR) {	    
++				  err = svn_error_createf(SVN_ERR_RA_SVN_UNKNOWN_CMD, NULL,
++						  _("\n     Operation has been cancelled by server.\n" 
++							  "     Perhaps you do not have sufficiant rights.\n"
++							  "     Details : \n"
++							  "               b->user : %s\n"
++							  "               b->tunnel_user : %s\n"
++							  "               svn_repos_path : %s\n"
++							  "               b->fs_path->data : %s\n"
++							  "               cmdname : %s\n"
++						   ), b->user, b->tunnel_user, svn_repos_path(b->repos, subpool),
++						  b->fs_path->data, cmdname);
++				  err = svn_error_create(SVN_ERR_RA_SVN_CMD_ERR, err, NULL);
++				  if (err && err->apr_err == SVN_ERR_RA_SVN_CMD_ERR)
++				  {
++					  write_err = svn_ra_svn_write_cmd_failure(conn, subpool, err->child);
++					  svn_error_clear(err);
++					  if (write_err)
++						  return write_err;
++				  }
++				  else if (err)
++					  return err;
++			  }
++		  }
++		  err = (*commands[i].handler)(conn, subpool, params, baton);
++	  }
+       else
+         {
+           err = svn_error_createf(SVN_ERR_RA_SVN_UNKNOWN_CMD, NULL,
+diff -urNp subversion-1.4.2.org/subversion/libsvn_repos/hooks.c subversion-1.4.2/subversion/libsvn_repos/hooks.c
+--- subversion-1.4.2.org/subversion/libsvn_repos/hooks.c	2006-07-20 01:44:53.000000000 +0900
++++ subversion-1.4.2/subversion/libsvn_repos/hooks.c	2010-08-24 13:52:03.000000000 +0900
+@@ -662,6 +662,40 @@ svn_repos__hooks_post_revprop_change(svn
+ 
+ 
+ 
++svn_error_t * 
++svn_repos__hooks_pre_command(svn_repos_t *repos,
++		const char *cmdname,
++		char *target,
++		const char *user,
++		apr_pool_t *pool)
++{
++	const char *hook = svn_repos_pre_command_hook(repos, pool);
++	svn_boolean_t broken_link;
++
++	if ((hook = check_hook_cmd(hook, &broken_link, pool)) && broken_link)
++	{
++		return hook_symlink_error(hook);
++	}
++	else if (hook)
++	{ 
++		const char *args[6];
++
++		args[0] = hook;
++		args[1] = svn_repos_path(repos, pool);
++		args[2] = cmdname;
++		args[3] = target;
++		args[4] = user ? user : "<anonymous>";
++		args[5] = NULL;
++
++		SVN_ERR(run_hook_cmd(SVN_REPOS__HOOK_PRE_COMMAND,
++					hook, args, TRUE, NULL, pool));
++	} 
++
++	return SVN_NO_ERROR;
++} 
++
++
++
+ svn_error_t  *
+ svn_repos__hooks_pre_lock(svn_repos_t *repos,
+                           const char *path,
+diff -urNp subversion-1.4.2.org/subversion/libsvn_repos/repos.c subversion-1.4.2/subversion/libsvn_repos/repos.c
+--- subversion-1.4.2.org/subversion/libsvn_repos/repos.c	2006-08-23 22:37:25.000000000 +0900
++++ subversion-1.4.2/subversion/libsvn_repos/repos.c	2010-08-24 13:52:03.000000000 +0900
+@@ -98,6 +98,13 @@ svn_repos_start_commit_hook(svn_repos_t 
+ }
+ 
+ 
++const char * 
++svn_repos_pre_command_hook(svn_repos_t *repos, apr_pool_t *pool) 
++{ 
++	return svn_path_join(repos->hook_path, SVN_REPOS__HOOK_PRE_COMMAND, pool); 
++} 
++
++
+ const char *
+ svn_repos_pre_commit_hook(svn_repos_t *repos, apr_pool_t *pool)
+ {
+diff -urNp subversion-1.4.2.org/subversion/libsvn_repos/repos.h subversion-1.4.2/subversion/libsvn_repos/repos.h
+--- subversion-1.4.2.org/subversion/libsvn_repos/repos.h	2006-08-23 03:54:23.000000000 +0900
++++ subversion-1.4.2/subversion/libsvn_repos/repos.h	2010-08-24 13:52:03.000000000 +0900
+@@ -65,6 +65,7 @@ extern "C" {
+ 
+ /* In the repository hooks directory, look for these files. */
+ #define SVN_REPOS__HOOK_START_COMMIT    "start-commit"
++#define SVN_REPOS__HOOK_PRE_COMMAND     "pre-command"
+ #define SVN_REPOS__HOOK_PRE_COMMIT      "pre-commit"
+ #define SVN_REPOS__HOOK_POST_COMMIT     "post-commit"
+ #define SVN_REPOS__HOOK_READ_SENTINEL   "read-sentinels"
+@@ -197,6 +198,15 @@ svn_repos__hooks_post_revprop_change(svn
+                                      char action,
+                                      apr_pool_t *pool);
+ 
++/* Run the pre-command hook for REPOS. Use POOL for any temporary 
++   allocations. If the hook fails, return SVN_ERR_REPOS_HOOK_FAILURE.*/ 
++svn_error_t *
++svn_repos__hooks_pre_command(svn_repos_t *repos,
++		const char *cmdname,
++		char *target,
++		const char *user,
++		apr_pool_t *pool);
++
+ /* Run the pre-lock hook for REPOS.  Use POOL for any temporary
+    allocations.  If the hook fails, return SVN_ERR_REPOS_HOOK_FAILURE.  
+ 
