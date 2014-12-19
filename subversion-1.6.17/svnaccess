@@ -3,8 +3,8 @@
 # @file: svnaccess
 # @brief: svn access perl script
 # @author: YoungJoo.Kim <vozlt@vozlt.com>
-# @version: $Revision:
-# @date: $Date:
+# @version:
+# @date:
 #
 
 my $repos = $ARGV[0];

@@ -3,8 +3,8 @@
 # @file: wsvnaccess
 # @brief: websvn access perl script
 # @author: YoungJoo.Kim <vozlt@vozlt.com>
-# @version: $Revision:
-# @date: $Date:
+# @version:
+# @date:
 #
 
 my $repos = shift;
