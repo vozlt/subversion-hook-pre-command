@@ -2,9 +2,9 @@
 #
 # @file: pre-command
 # @brief: pre-command hook bash script
-# @author: YoungJoo.Kim <http://superlinuxer.com>
-# @version: $Revision:
-# @date: $Date:
+# @author: YoungJoo.Kim <vozlt@vozlt.com>
+# @version:
+# @date:
 #
 
 [ -n "$1" ] && REPOS="$1" || REPOS=0

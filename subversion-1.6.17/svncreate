@@ -2,7 +2,7 @@
 #
 # @file: svncreate
 # @brief: svn bash script
-# @author: YoungJoo.Kim <http://superlinuxer.com>
+# @author: YoungJoo.Kim <vozlt@vozlt.com>
 # @version: $Revision:
 # @date: $Date:
 #
@@ -65,11 +65,11 @@ echo " * Init repository"
 svn mkdir file://localhost/$repos_parent/${repos_child}/tags -m "init tags" >& /dev/null
 svn mkdir file://localhost/$repos_parent/${repos_child}/branches -m "init branches" >& /dev/null
 svn mkdir file://localhost/$repos_parent/${repos_child}/trunk -m "init trunk" >& /dev/null
-cp /superlinuxer/bin/svn-hook-scripts/pre-command /${repos_parent}/${repos_child}/hooks >& /dev/null
-cp /superlinuxer/bin/svn-hook-scripts/access.conf /${repos_parent}/${repos_child}/conf >& /dev/null
-cp /superlinuxer/bin/svn-hook-scripts/access_file.conf /${repos_parent}/${repos_child}/conf >& /dev/null
-cp /superlinuxer/bin/svn-hook-scripts/access_db.conf /${repos_parent}/${repos_child}/conf >& /dev/null
-cp /superlinuxer/bin/svn-default-conf/svnserve.conf /${repos_parent}/${repos_child}/conf >& /dev/null
+cp /vozlt/bin/svn-hook-scripts/pre-command /${repos_parent}/${repos_child}/hooks >& /dev/null
+cp /vozlt/bin/svn-hook-scripts/access.conf /${repos_parent}/${repos_child}/conf >& /dev/null
+cp /vozlt/bin/svn-hook-scripts/access_file.conf /${repos_parent}/${repos_child}/conf >& /dev/null
+cp /vozlt/bin/svn-hook-scripts/access_db.conf /${repos_parent}/${repos_child}/conf >& /dev/null
+cp /vozlt/bin/svn-default-conf/svnserve.conf /${repos_parent}/${repos_child}/conf >& /dev/null
 chgrp -R "splrgroups" "/${repos_parent}/${repos_child}/hooks/pre-command"
 chgrp -R "splrgroups" "/${repos_parent}/${repos_child}/conf/access.conf"
 chgrp -R "splrgroups" "/${repos_parent}/${repos_child}/conf/access_file.conf"

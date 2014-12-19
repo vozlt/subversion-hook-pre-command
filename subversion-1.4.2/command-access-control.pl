@@ -2,9 +2,9 @@
 #
 # @file: command-access-control.pl
 # @brief: pre-command hook perl script
-# @author: YoungJoo.Kim <http://superlinuxer.com>
-# @version: $Revision:
-# @date: $Date:
+# @author: YoungJoo.Kim <vozlt@vozlt.com>
+# @version:
+# @date:
 #
 
 my $repos = shift;

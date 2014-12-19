@@ -2,9 +2,9 @@
 #
 # @file: command-access-control.pl
 # @brief: pre-command hook perl script
-# @author: YoungJoo.Kim <http://superlinuxer.com>
-# @version: $Revision:
-# @date: $Date:
+# @author: YoungJoo.Kim <vozlt@vozlt.com>
+# @version:
+# @date:
 #
 
 my $repos = shift;
@@ -325,7 +325,7 @@ sub getAccessmethod {
 
 	@tmpa = (); @tmpb = ();
 
-	# access_db_host = svn.dev.superlinuxer.com
+	# access_db_host = svn.dev.vozlt.com
 	# access_db_name = svn
 	# access_db_user = svn
 	# access_db_password = svn_password
